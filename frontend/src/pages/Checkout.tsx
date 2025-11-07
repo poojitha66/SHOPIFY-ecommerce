@@ -15,19 +15,31 @@ const Checkout = () => {
     setError(null);
     try {
       const formData = new FormData(event.currentTarget);
+      const lineItems = items.map(({ product, quantity }) => ({
+        product: product._id,
+        quantity,
+        price: product.price,
+      }));
+
       const orderPayload = {
-        items: items.map(({ product, quantity }) => ({ product: product._id, quantity })),
-        shippingAddress: {
-          fullName: formData.get('fullName'),
-          address: formData.get('address'),
-          city: formData.get('city'),
-          postalCode: formData.get('postalCode'),
-          country: formData.get('country'),
+        order: {
+          line_items: lineItems,
+          shipping_address: {
+            full_name: formData.get('fullName'),
+            address: formData.get('address'),
+            city: formData.get('city'),
+            postal_code: formData.get('postalCode'),
+            country: formData.get('country'),
+          },
         },
       };
 
       await createOrder(orderPayload);
-      await createCheckoutSession({ amount: Math.round(total * 100) });
+      await createCheckoutSession({
+        items: lineItems,
+        success_url: `${window.location.origin}/success`,
+        cancel_url: `${window.location.origin}/cancel`,
+      });
       clearCart();
       navigate('/');
     } catch (err) {

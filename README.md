@@ -15,13 +15,13 @@ These flows emulate the agenda of a real-world commerce operation—delighting c
    - Customers register and authenticate via the `/api/auth` endpoints.
    - JSON Web Tokens (JWT) secure subsequent requests and guard admin-only routes.
 2. **Catalog Management**
-   - The React frontend fetches product data from the Express API (`/api/products`).
-   - Admin users can create, update, or archive items; changes persist in MongoDB.
+   - The React frontend fetches product data from the Rails API (`/api/products`).
+   - Admin users can create, update, or archive items; changes persist in PostgreSQL.
 3. **Cart & Order Flow**
    - Cart state is handled by the Context API, mirroring selections across the app.
-   - Order submissions trigger the `/api/orders` route, storing order payloads and customer linkage.
+   - Order submissions trigger the `/api/orders` route, storing order payloads, shipping details, and customer linkage.
 4. **Payments**
-   - Checkout calls `/api/create-checkout-session`, which uses Stripe SDKs to initialize payment sessions.
+   - Checkout calls `/api/checkout/session`, which uses the Stripe Ruby SDK to initialize payment sessions.
    - Stripe responds with a session ID that the frontend uses to redirect customers to hosted checkout.
 5. **Post-Purchase Management**
    - After payment confirmation, Stripe webhooks (stubbed for future extension) can notify the backend to finalize orders and update inventory.
@@ -35,19 +35,19 @@ These flows emulate the agenda of a real-world commerce operation—delighting c
 - **Stripe Integration**: `@stripe/stripe-js` powers client-side payment redirection.
 
 ### Backend
-- **Runtime**: Node.js with Express for routing, middleware orchestration, and REST APIs.
-- **Database**: MongoDB (via Mongoose ODM) stores users, products, and orders with schema validation.
-- **Security**: `bcryptjs` for password hashing, `jsonwebtoken` for JWT issuance, `cors` for controlled cross-origin access.
-- **Payments**: Stripe Node SDK (`stripe`) creates checkout sessions.
-- **Dev Tooling**: `nodemon` provides live reload during development; environment secrets load from `.env` via `dotenv`.
+- **Framework**: Ruby on Rails 7 (API-only mode) provides controllers, routing, and Active Record models.
+- **Database**: PostgreSQL stores users, products, and orders with relational integrity.
+- **Security**: `bcrypt` for password hashing, `jwt` for token issuance, and `rack-cors` for controlled cross-origin access.
+- **Payments**: Stripe Ruby SDK (`stripe`) creates checkout sessions.
+- **Dev Tooling**: Rails credentials or `.env` files manage secrets; `puma` serves HTTP traffic during development.
 
 ## Architectural Overview
 ```
-[React + Context + Tailwind] ⇄ [Axios Service Layer] ⇄ [Express API]
-                                              ⇅
-                                   [MongoDB via Mongoose]
-                                              ⇅
-                                         [Stripe APIs]
+[React + Context + Tailwind] ⇄ [Axios Service Layer] ⇄ [Rails API]
+                                            ⇅
+                                      [PostgreSQL]
+                                            ⇅
+                                       [Stripe APIs]
 ```
 - The frontend consumes REST endpoints exposed under `/api`, synchronizing UI state with the backend.
 - JWT-authenticated requests protect sensitive operations such as order creation and product management.
@@ -57,11 +57,10 @@ These flows emulate the agenda of a real-world commerce operation—delighting c
 ```
 SHOPIFY-ecommerce/
 ├── backend/
-│   ├── config/              # MongoDB connection helper
-│   ├── controllers/         # Auth, product, order, and checkout logic
-│   ├── middleware/          # JWT auth guard
-│   ├── models/              # Mongoose schemas (User, Product, Order)
-│   └── routes/              # Express routers wired into index.js
+│   ├── app/                 # Rails models, controllers, and services
+│   ├── config/              # Database, environment, and routing configuration
+│   ├── db/                  # Active Record migrations and seeds
+│   └── Gemfile              # Ruby dependencies for the API
 └── frontend/
     ├── src/components/      # Shared UI components (Navbar, etc.)
     ├── src/context/         # CartContext provider
@@ -74,22 +73,25 @@ SHOPIFY-ecommerce/
 1. Navigate into the backend folder and install dependencies:
    ```bash
    cd backend
-   npm install
+   bundle install
    ```
-2. Provide environment variables by copying the template and updating values:
+2. Configure PostgreSQL access via environment variables or `config/database.yml`. A sample `.env.example` is provided with the following keys:
+    - `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, database names (`POSTGRES_DB`, `POSTGRES_TEST_DB`, `POSTGRES_PROD_DB`)
+   - `JWT_SECRET` and `STRIPE_SECRET_KEY`
+   - Optionally override `FRONTEND_ORIGIN` and `SECRET_KEY_BASE`
+3. Prepare the database:
    ```bash
-   cp .env.example .env
-   # populate DB_URI, JWT_SECRET, STRIPE_SECRET_KEY
+   rails db:create db:migrate db:seed
    ```
-3. Start the development server:
+4. Start the Rails API server:
    ```bash
-   npm run dev
+   rails server
    ```
-4. The API will be available at `http://localhost:5000` with the following primary endpoints:
+5. The API will be available at `http://localhost:3000/api` with the following primary endpoints:
    - `POST /api/auth/register`, `POST /api/auth/login`
    - `GET|POST|PUT|DELETE /api/products`
-   - `POST /api/orders`
-   - `POST /api/create-checkout-session`
+   - `GET|POST /api/orders`
+   - `POST /api/checkout/session`
 
 ### Frontend
 1. Start from the project root, change into the frontend folder, and install dependencies:
@@ -97,7 +99,7 @@ SHOPIFY-ecommerce/
    cd frontend
    npm install
    ```
-2. Configure a `.env` file if you need to override the default API URL (`VITE_API_URL`).
+2. Configure a `.env` file if you need to override the default API URL (`VITE_API_URL`, defaults to `http://localhost:3000/api`).
 3. Launch the Vite development server:
    ```bash
    npm run dev
@@ -105,7 +107,7 @@ SHOPIFY-ecommerce/
 4. Visit `http://localhost:5173` to explore the storefront. Login/register to unlock protected flows, add items to your cart, and complete the checkout journey.
 
 ## Extending the Demo
-- **Inventory seeding**: Add seed scripts or use MongoDB Atlas UI to populate products for richer catalog views.
+- **Inventory seeding**: Extend `db/seeds.rb` or write custom rake tasks to populate products for richer catalog views.
 - **Order lifecycle**: Implement Stripe webhook handlers to update order statuses post-payment.
 - **Analytics**: Integrate tools like Segment or Google Analytics for behavior insights.
 - **Deployment**: Containerize services or deploy to providers (e.g., Vercel + Render) for production-like testing.
